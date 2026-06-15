@@ -1,0 +1,28 @@
+name: Publish
+
+# Publishes sesamehr to PyPI when a GitHub Release is published.
+# Uses PyPI Trusted Publishing (OIDC) — no API token stored. The matching
+# trusted publisher on PyPI must be:
+#   Owner: SesameHR · Repository: sdk-python · Workflow: publish.yml · Environment: (none)
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  id-token: write # required for PyPI trusted publishing
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build distribution
+        run: |
+          pip install build
+          python -m build
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
