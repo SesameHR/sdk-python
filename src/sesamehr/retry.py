@@ -31,6 +31,21 @@ def default_should_retry(error: Exception) -> bool:
     return False
 
 
+def retry_if_not_sent(error: Exception) -> bool:
+    """Retry predicate for requests that are not safe to repeat (POST).
+
+    Retries only when the connection could not be opened, so the server never
+    saw the request. A 5xx, a dropped connection or an unreadable reply can
+    arrive after the server has already acted (clocked in, uploaded, approved),
+    and sending the POST again would do it twice.
+    """
+    return (
+        isinstance(error, SesameConnectionError)
+        and error.is_connect_error
+        and not _is_timeout_error(error)
+    )
+
+
 def with_retry(
     fn: Callable[[], T],
     *,

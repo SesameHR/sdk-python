@@ -111,6 +111,7 @@ except SesameConnectionError as e:
 ```
 
 Requests are retried automatically (2 retries, 500 ms delay) on connection errors and 5xx responses; 4xx responses and timeouts are not retried.
+POST requests (clock in/out, uploads, approvals, push notifications, posts) are only retried when the connection could not be opened at all: a 5xx or a dropped connection can come back after the server has already processed them, and sending them again would clock in, upload or approve twice.
 
 ## Differences vs the TypeScript SDK
 

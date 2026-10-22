@@ -27,7 +27,9 @@ def safe_json(response: httpx.Response) -> Any:
 def connection_error(exc: Exception) -> SesameConnectionError:
     if isinstance(exc, httpx.TimeoutException):
         return SesameConnectionError(str(exc) or "request timed out", is_timeout=True)
-    return SesameConnectionError(str(exc) or type(exc).__name__)
+    return SesameConnectionError(
+        str(exc) or type(exc).__name__, is_connect_error=isinstance(exc, httpx.ConnectError)
+    )
 
 
 def do_fetch(

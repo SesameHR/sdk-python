@@ -22,9 +22,12 @@ class SesameApiError(SesameError):
 class SesameConnectionError(SesameError):
     """Network-level failure: DNS, connect, timeout, or unparseable response."""
 
-    def __init__(self, cause: str, *, is_timeout: bool = False) -> None:
+    def __init__(self, cause: str, *, is_timeout: bool = False, is_connect_error: bool = False) -> None:
         super().__init__(f"Connection failed: {cause}")
         self.is_timeout = is_timeout
+        # True when the connection could not be opened (DNS, refused, TLS), so
+        # the request never reached the server.
+        self.is_connect_error = is_connect_error
 
 
 def _extract_message(body: Any, status: int) -> str:

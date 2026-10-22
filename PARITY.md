@@ -20,7 +20,7 @@ http, bi, types, auth, autologin, client/exports):
 | Method-arg defaults (limit/offset/page/orderBy/…) | identical |
 | Request body keys/values | identical |
 | BI query construction (from/select/where/group_by/order_by) | identical |
-| Retry policy (2 retries, 500 ms, 5xx + connection only) | identical |
+| Retry policy (2 retries, 500 ms, 5xx + connection only) | identical for GET/PUT/DELETE; POST differs until the TS change below lands |
 | Headers (Authorization/CSID/ESID/x-company-id/X-Region) | identical |
 | Public export surface | full parity (minus intentional idioms below) |
 
@@ -89,6 +89,16 @@ Three cases where the Python behavior was correct and the TS SDK had a latent bu
 3. **`Evaluation`.** TS declared `id: string` (required) and lacked `evaluationId`. Now every field is optional with an index signature, and `evaluationId`/`evaluationTitle`/`formTitle`/… are typed — matching the Python `Evaluation`.
 
 TS suite after these fixes: 168 tests green.
+
+## Open: POST retries (Python changed, TS pending)
+
+Both SDKs retried every request on a 5xx or a connection error, POST included. A
+gateway 502, a dropped connection or a non-JSON `2xx` can arrive after the backend has
+already processed a POST, so `clock_in()`, uploads, approvals, push notifications and
+posts were sent a second time. Python now retries POST only when the connection could
+not be opened (`retry_if_not_sent`); `work_stats.summary` is a read sent as POST and
+keeps the full policy (`idempotent=True`). The TS SDK still needs the same change in
+`HttpClient.request`/`upload`.
 
 ## Not an SDK issue
 
