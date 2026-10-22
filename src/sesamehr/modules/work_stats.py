@@ -55,5 +55,6 @@ class WorkStatsModule:
                 "from": from_,
                 "to": to,
             },
+            idempotent=True,  # a read sent as POST: safe to retry
         )
         return WorkStatsResult.model_validate(response["data"])

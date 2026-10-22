@@ -5,7 +5,10 @@ import httpx
 from ._fetch import connection_error, safe_json
 from .config import ResolvedConfig, tenant_headers
 from .errors import SesameApiError
-from .retry import with_retry
+from .retry import retry_if_not_sent, with_retry
+
+# Methods that are safe to send again after a 5xx or a dropped connection.
+_IDEMPOTENT_METHODS = frozenset({"GET", "PUT", "DELETE"})
 
 
 def _to_str(value: Any) -> str:
@@ -50,12 +53,15 @@ class HttpClient:
         """GET and unwrap the { data: ... } response."""
         return self.get(path, params)["data"]
 
-    def post(self, path: str, body: Any = None) -> Any:
-        return self._request("POST", path, body=body)
+    def post(self, path: str, body: Any = None, *, idempotent: bool = False) -> Any:
+        """POST. Retried after a 5xx or a dropped connection only when
+        `idempotent=True` (a read sent as POST); otherwise only when the
+        connection could not be opened."""
+        return self._request("POST", path, body=body, idempotent=idempotent)
 
-    def post_data(self, path: str, body: Any = None) -> Any:
+    def post_data(self, path: str, body: Any = None, *, idempotent: bool = False) -> Any:
         """POST and unwrap the { data: ... } response."""
-        return self.post(path, body)["data"]
+        return self.post(path, body, idempotent=idempotent)["data"]
 
     def put(self, path: str, body: Any = None) -> Any:
         return self._request("PUT", path, body=body)
@@ -78,9 +84,20 @@ class HttpClient:
         if not files:
             files = {key: (None, _to_str(value)) for key, value in (data or {}).items()}
             data = None
-        return with_retry(lambda: self._send("POST", url, headers=headers, data=data, files=files))
+        return with_retry(
+            lambda: self._send("POST", url, headers=headers, data=data, files=files),
+            should_retry=retry_if_not_sent,
+        )
 
-    def _request(self, method: str, path: str, *, body: Any = None, params: dict[str, Any] | None = None) -> Any:
+    def _request(
+        self,
+        method: str,
+        path: str,
+        *,
+        body: Any = None,
+        params: dict[str, Any] | None = None,
+        idempotent: bool = False,
+    ) -> Any:
         url = f"{self._config.base_url}{path}"
         headers = {
             "Authorization": f"Bearer {self._config.token}",
@@ -91,7 +108,11 @@ class HttpClient:
             headers["Content-Type"] = "application/json"
         json_body = _drop_none(body) if body is not None else None
         query = _build_params(params)
-        return with_retry(lambda: self._send(method, url, headers=headers, params=query, json_body=json_body))
+        safe_to_repeat = idempotent or method in _IDEMPOTENT_METHODS
+        return with_retry(
+            lambda: self._send(method, url, headers=headers, params=query, json_body=json_body),
+            should_retry=None if safe_to_repeat else retry_if_not_sent,
+        )
 
     def _send(
         self,
